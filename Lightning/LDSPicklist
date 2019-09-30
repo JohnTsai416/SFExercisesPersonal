@@ -1,0 +1,97 @@
+public with sharing class ComponentController {
+    @AuraEnabled(cacheable=true)
+    public static pickListValues getPickListValuesOfObjects(String objectname){
+        pickListValues pickValues=new pickListValues(objectname);
+        return pickValues;
+    }
+    
+    @AuraEnabled
+    public static List<RD_URLA_GetPicklistforObjectsUtlity.PicklistValue> getBorrowerNames(String applicationId){ 
+        List<RD_URLA_GetPicklistforObjectsUtlity.PicklistValue> picklistValues = new List<RD_URLA_GetPicklistforObjectsUtlity.PicklistValue>();
+        try{
+            for (RD_URLA_Borrower__c borrower : [Select 
+                                                 r.RD_URLA_Last_Name__c, 
+                                                 r.RD_URLA_First_Name__c, 
+                                                 r.RD_URLA_Application__c, 
+                                                 r.Id 
+                                                 From RD_URLA_Borrower__c r
+                                                 Where r.RD_URLA_Application__c=:applicationId
+                                                ]) {
+                                                    picklistValues.add(
+                                                        new RD_URLA_GetPicklistforObjectsUtlity.PicklistValue(borrower.id, borrower.RD_URLA_First_Name__c+' '+borrower.RD_URLA_Last_Name__c)
+                                                    );
+                                                }
+        }catch(Exception e){throw new AuraHandledException('Exception in retrieving borrower names: '+ e.getMessage());}
+        return picklistValues;
+    }
+    
+    @AuraEnabled
+    public static List<Id> getRealEstateInformation(string applicationId){
+        List<Id> recordIds = new List<Id>();
+        List<RD_URLA_BorrowerRealEstate__c> realEstate = [SELECT Id from RD_URLA_BorrowerRealEstate__c
+                                                          where RD_URLA_Related_Borrower__c IN 
+                                                          (SELECT Id from RD_URLA_Borrower__c where RD_URLA_Application__c = :applicationId) Order By CreatedDate asc];
+        for(RD_URLA_BorrowerRealEstate__c obj : realEstate){
+            recordIds.add(obj.Id);
+        }
+        return recordIds;
+    }
+    
+    @AuraEnabled
+    public static List<Id> getRealEstateMortgage(string propertyId){
+        List<Id> recordIds = new List<Id>();
+        List<RD_URLA_BorrowerRealEstateLoan__c> mortgage = [SELECT Id from RD_URLA_BorrowerRealEstateLoan__c
+                                                            where RD_URLA_Borrower_Real_Estate__c =:propertyId Order By CreatedDate asc];
+        for(RD_URLA_BorrowerRealEstateLoan__c obj : mortgage){
+            recordIds.add(obj.Id);
+        }        
+        return recordIds;
+    }
+    
+    public class pickListValues {
+        // properties
+        @AuraEnabled
+        public Map<String, List<PicklistValue>> picklistValues { get; set; }
+        
+        public pickListValues(String objectname) {
+            picklistValues = new Map<String, List<PicklistValue>>();
+            if(objectname=='RD_URLA_BorrowerRealEstate__c'){//Retrieves Account types from Borrower Asset liability object - Added by Dhruva          
+                Schema.DescribeSObjectResult realestateObj = RD_URLA_BorrowerRealEstate__c.SObjectType.getDescribe();
+                picklistValues.put('RD_URLA_Property_Type__c', getPicklistValues(realestateObj, 'RD_URLA_Property_Type__c'));
+                picklistValues.put('RD_URLA_State__c', getPicklistValues(realestateObj, 'RD_URLA_State__c'));
+                picklistValues.put('RD_URLA_Status__c', getPicklistValues(realestateObj, 'RD_URLA_Status__c'));
+            }
+        }
+        
+        private List<PicklistValue> getPicklistValues(Schema.DescribeSObjectResult sObj, String fieldName) {
+            
+            // declaration(s)
+            List<PicklistValue> picklistValues = new List<PicklistValue>();
+            
+            // loop through picklist values and add to list
+            for(Schema.PicklistEntry pickListVal : sObj.fields.getMap().get(fieldName).getDescribe().getPicklistValues()) {
+                picklistValues.add(
+                    new PicklistValue(pickListVal.getValue(), pickListVal.getLabel())
+                );
+            }
+            
+            // return list
+            return picklistValues;
+        }
+        
+    }
+    
+    public class PicklistValue {
+        @AuraEnabled
+        public String value {get;set;}
+        @AuraEnabled
+        public String label {get;set;}
+        @AuraEnabled
+        public Boolean selected {get;set;}
+        public PicklistValue(String value, String label) {
+            this.value = value;
+            this.label = label;
+            this.selected = false;
+        }
+    }
+}
